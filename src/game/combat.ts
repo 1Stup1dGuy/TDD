@@ -6,48 +6,54 @@ const damage = (u: LiveUnit, amt: number) => { const blocked = Math.min(u.shield
 
 export const rollAgain = (s: GameState) => {
   const actor = alive(s.party)[0]; if (!actor) return;
-  const face = rollForUnit(actor); s.lastFace = face.label;
+  const face = rollForUnit(actor); s.lastFace = face.label; s.fxPulse = 10;
   if (face.type === 'overload') s.overloads += 1;
-  else if (face.type === 'hit') s.rollTotal += face.value;
+  else if (face.type === 'hit') s.rollTotal += face.value + actor.upgrades.power;
   else actor.shield += face.value;
   const limit = unitDef(actor).overloadLimit + actor.upgrades.safer;
-  if (s.overloads > limit) { s.log.unshift('Reactor overload! Attack lost.'); s.rollTotal = 0; s.overloads = 0; s.phase = 'enemy'; }
+  if (s.overloads > limit) { s.log.unshift('☢ OVERLOAD! Charge vented and enemy gets initiative.'); s.rollTotal = 0; s.overloads = 0; s.phase = 'enemy'; }
 };
 
 export const fireNow = (s: GameState) => {
   const target = alive(s.enemies)[0]; if (!target) return;
   const actor = alive(s.party)[0]; if (!actor) return;
-  const dmg = s.rollTotal + (actor.templateId === 'captain_rook' ? 1 : 0);
-  damage(target, dmg); s.log.unshift(`Fired for ${dmg} damage.`); s.rollTotal = 0; s.overloads = 0; s.phase = 'enemy';
+  const dmg = Math.max(1, s.rollTotal + (actor.templateId === 'captain_rook' ? 1 : 0));
+  damage(target, dmg); s.log.unshift(`🔥 You fired for ${dmg} damage into ${unitDef(target).name}.`); s.rollTotal = 0; s.overloads = 0; s.phase = 'enemy';
   if (target.dead && unitDef(target).recruitable) s.pendingRecruit = target.templateId;
 };
 
 export const defend = (s: GameState) => {
   for (const u of alive(s.party)) u.shield += 3 + (u.templateId === 'zib' ? 1 : 0);
-  s.log.unshift('Party braced and gained shields.'); s.phase = 'enemy';
+  s.log.unshift('🛡 Crew braced. Shields raised.'); s.phase = 'enemy';
 };
 
 export const enemyTurn = (s: GameState) => {
   for (const e of alive(s.enemies)) {
-    const dmg = 2 + Math.floor(Math.random() * 6);
+    const def = unitDef(e);
+    const dmg = def.intent.min + Math.floor(Math.random() * (def.intent.max - def.intent.min + 1));
     const t = alive(s.party)[0]; if (!t) break;
-    damage(t, dmg); s.log.unshift(`${unitDef(e).name} attacks for ${dmg}.`);
+    damage(t, dmg); s.log.unshift(`${def.name} uses ${def.intent.style} for ${dmg}.`);
   }
   if (alive(s.party).length === 0) { s.screen = 'gameover'; return; }
   if (alive(s.enemies).length === 0) {
     s.screen = 'reward';
-    s.rewardOptions = ['Repair Hull (+6 HP all)', 'Tune Dice (+1 power random)', 'Stabilize Core (+1 safer random)'];
+    s.rewardOptions = ['Overclock Die (+2 roll this sector for one unit)', 'Nano-Repair (heal all +8)', 'Core Lattice (+1 overload limit random unit)', 'Tactical Swap (draw 1 alien from bench to full HP)'];
     return;
   }
   s.phase = 'player';
 };
 
-export const enemyIntent = () => `${2 + Math.floor(Math.random() * 6)} dmg`;
+export const enemyIntent = (id: string) => {
+  const i = unitDef({ templateId: id } as LiveUnit).intent;
+  return `${i.style}: ${i.min}-${i.max} dmg`;
+};
+
+export const captureChance = (hp: number, maxHp: number) => Math.max(10, Math.min(90, Math.round((1 - hp / maxHp) * 100)));
 
 export const afterRewardAdvance = (s: GameState) => {
   s.encounter += 1;
   if (s.encounter > 3) { s.encounter = 0; s.sectorIndex += 1; }
   if (s.sectorIndex >= 5) { s.screen = 'victory'; return; }
   s.screen = 'battle'; s.pendingRecruit = undefined;
-  s.log.unshift(`Jumping to ${currentSector(s).name}.`);
+  s.log.unshift(`➡ Jumping to ${currentSector(s).name}. ${currentSector(s).flavor}`);
 };

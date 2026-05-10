@@ -11,6 +11,7 @@ if (!app) throw new Error('Missing #app element');
 
 let state: GameState = { ...newGame(), screen: 'title' };
 
+const normalize = (s: GameState): GameState => ({ ...newGame(), ...s, tutorialStep: s.tutorialStep ?? 0, fxPulse: s.fxPulse ?? 0 });
 const startNew = () => { state = newGame(); spawnEncounter(state); saveGame(state); render(); };
 const goTitle = () => { state.screen = 'title'; render(); };
 
@@ -21,7 +22,7 @@ const render = () => {
   if (state.screen !== 'title') draw(canvas, state);
   bind(app, state, render, startNew, goTitle);
   const cont = document.getElementById('cont');
-  if (cont) cont.onclick = () => { const loaded = loadGame(); if (loaded) { state = loaded; if (state.enemies.length === 0 && state.screen === 'battle') spawnEncounter(state); } render(); };
+  if (cont) cont.onclick = () => { const loaded = loadGame(); if (loaded) { state = normalize(loaded); if (state.enemies.length === 0 && state.screen === 'battle') spawnEncounter(state); } render(); };
   if (state.screen === 'battle' && state.enemies.length === 0) { spawnEncounter(state); render(); }
 };
 
